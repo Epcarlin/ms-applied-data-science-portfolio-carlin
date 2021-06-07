@@ -1,5 +1,7 @@
 Project 1: Customer Satisfaction In The Airline Industry – Southeast Airlines
+
 Program: R/RStudio
+
 This project was the culmination of my first course in the data science program, IST 687 - Introduction to Data Science. This course is designed to introduce 
 the fundamentals of data science and the processes of effective business application. Throughout the course we learned a broad overview of business function 
 surrounding the technologies used in the field, handling data, and the most efficient way to convey actionable insights through visualization techniques. For my 
