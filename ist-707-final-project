@@ -1,0 +1,774 @@
+### Pat Carlin 
+### Project information 
+
+### Loading package
+loadLibraries()
+install.packages("data.table")
+require(data.table)
+
+getwd()
+setwd("/Users/patrickcarlin/Documents/MS Applied Data Science Portfolio/IST 707 - Final Project")
+### Loading Data
+drug_Test <- as.data.frame(fread("drugsComTest_raw.tsv"))
+drug_Train <- as.data.frame(fread("drugsComTrain_raw.tsv"))
+
+### Setting Factor
+drug_Test$rating <- as.factor(drug_Test$rating)
+drug_Train$rating <- as.factor(drug_Train$rating)
+
+### Subsetting Function
+train <- sample(nrow(drug_Train),nrow(drug_Train)*0.01)
+test <- sample(nrow(drug_Test),nrow(drug_Test)*0.05)
+
+### Subsetting Data
+traindata <- drug_Train[train,]
+testdata <- drug_Test[test,]
+
+# using the str() function to determine the structure of the date
+str(traindata)
+str(testdata)
+
+# check the number of observations and varaibles for the train and test dataset
+dim(testdata)
+dim(traindata)
+
+#######################################################################
+#                UNDERSTANDING DATA, CLEANING AND PRE-PROCESSING
+######################################################################
+
+# combined the two datasets(train and test) for cleaning purposes
+drugDataset <- rbind(traindata, testdata)
+View(head(drugDataset, 15))
+
+dim(drugDataset)
+
+
+# fetching the name of all columns/varaibles
+colnames(drugDataset)
+
+#renaming the ID column
+names(drugDataset)[names(drugDataset)=="?.."] <- "uniqueID"
+
+# checking the counting of unique numbers in the uinqueID column and comparing it with total count of observations
+length(unique(drugDataset$uniqueID))
+dim(drugDataset)
+
+# Unique conditions in the varions dataset
+##      (unique(drugDataset$condition))
+length((unique(drugDataset$condition)))
+length((unique(traindata$condition)))
+length((unique(testdata$condition)))
+
+# Unique drugName in the varions dataset
+length((unique(drugDataset$drugName)))
+length((unique(traindata$drugName)))
+length((unique(testdata$drugName)))
+
+#install.packages("sqldf")
+library(sqldf)
+library(ggplot2)
+
+# using sqldf package/library to extract common conditions and frequency in the dataset
+condition_SQL <- sqldf("SELECT DISTINCT(condition), count(condition) AS conditionCount 
+                    FROM drugDataset 
+                    GROUP BY condition 
+                    ORDER BY conditionCount DESC")
+
+View(head(condition_SQL, n=20))
+#View(head(condition_SQL, n=10))
+View(tail(condition_SQL, n=20))
+str(condition_SQL)
+is.data.frame(condition_SQL)
+
+condition_SQL$conditionCount <- as.numeric(condition_SQL$conditionCount)
+
+# store top 20 conditions in an object call commonConditions
+commonConditions <- (head(condition_SQL, n=20))
+leastConditions <- (tail(condition_SQL, n=20))
+View(commonConditions)
+View(leastConditions)
+# order the conditions in relation to high frequency
+commonConditions$condition <- factor(commonConditions$condition, levels = commonConditions$condition[order(-commonConditions$conditionCount)])
+
+# visualizing the TOP 20 conditions in the dataset
+ggplot(data=commonConditions, aes(x=condition, y=conditionCount, fill = condition)) +
+  geom_bar(position ='stack', stat="identity") + theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                                                                  size = 8, angle = 90)) + ggtitle('Top 20 Conditions in Drug Reviews') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Conditions Reviewed') + ylab('Number of Conditions') 
+
+
+#ggplot(commonConditions, aes(x = condition, y = conditionCount)) + geom_point() +
+#theme(axis.text.x = element_text(face = "bold", color = "red", size = 8, angle = 90))
+
+# exploring birth Control and Drug Name
+TestQuery <- sqldf("SELECT DISTINCT(condition), drugName, count(drugName) AS drugCount 
+                    FROM drugDataset 
+                    WHERE Condition = 'Birth Control'
+                    GROUP BY condition, drugName
+                    ORDER BY drugCount DESC")
+
+drugs_BC <- (TestQuery[1:20,])
+str(drugs_BC)
+
+View(head(drugs_BC, n=20))
+
+# order the conditions in relation to high frequency
+drugs_BC$drugName <- factor(drugs_BC$drugName, levels = drugs_BC$drugName[order(-drugs_BC$drugCount)])
+
+#graph the TOP 20 BIRTh CONTROL drugs distribution by customers
+ggplot(drugs_BC, aes(x=drugName, y=drugCount, fill=drugName)) +  geom_bar(position ='stack', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                   size = 8, angle = 90)) + ggtitle('Top 20 Birth Control in Drug Reviews') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') +  ylab('Frequency of Use/Review') 
+
+# Exploring TOP 20 Drugs per conditions by Customers
+TestQuery <- sqldf("SELECT DISTINCT(condition), drugName, count(drugName) AS drugCount 
+                    FROM drugDataset 
+                    GROUP BY condition, drugName
+                    ORDER BY drugCount DESC")
+
+drug_conditionTOP20 <- head(TestQuery, 20)
+drug_conditionBOTTOM10 <- tail(TestQuery, 10)
+
+View(drug_conditionTOP20)
+View(drug_conditionBOTTOM10)
+
+
+# order the drugName and conditions in relation to high frequency
+drug_conditionTOP20$drugName <- factor(drug_conditionTOP20$drugName, levels = drug_conditionTOP20$drugName[order(-drug_conditionTOP20$drugCount)])
+
+#graph the TOP 20 drugs and Conditions drug distribution of customers
+ggplot(drug_conditionTOP20, aes(x=drugName, y=drugCount, fill=condition)) + geom_bar(position ='dodge', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                   size = 8, angle = 90)) + ggtitle('Top 20 Drugs in Drug Reviews') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') +  ylab('Frequency of Use/Review')
+
+
+################  Rating Distributing
+# using SQL Query to extract rating distribution
+RatingQuery <- sqldf("SELECT rating, count(rating) ratingCount 
+                     FROM drugDataset 
+                     GROUP BY rating
+                     ORDER BY rating DESC, ratingCount DESC")
+(RatingQuery)
+
+# Graph the rating distribution
+ggplot(RatingQuery, aes(x=rating, y=ratingCount, fill=rating)) + geom_bar(stat="identity") +
+  ggtitle('Ratings Distribution base on Customer Reviews') + theme_classic(base_size = 10)
+
+################  UsefulCount and Rating Distributing
+# using SQL Query to extract rating distribution
+(usefulQuery <- sqldf("SELECT usefulCount, rating
+                     FROM drugDataset 
+                     ORDER BY usefulCount DESC, rating DESC"))
+
+View(head(usefulQuery, 10))
+
+scatter.smooth(usefulQuery$rating, usefulQuery$usefulCount)
+
+# Graph the usefulCount and ratings distribution using heatmap
+ggplot(usefulQuery, aes(x=rating, y=usefulCount)) + geom_tile(aes(fill=rating)) +
+  scale_fill_gradient(low="green", high="red") +
+  ggtitle('UsefulCount vs Rating Distribution')
+# the higher the rating the more it becomes useful to others
+
+
+############       Average UsefulCount vs Rating
+AveUsefulQuery <- sqldf("SELECT rating, AVG(usefulCount) avgUsefulCount 
+                     FROM drugDataset 
+                     GROUP BY rating
+                     ORDER BY rating DESC")
+
+(AveUsefulQuery)
+ggplot(AveUsefulQuery) +  geom_point(aes(x=rating, y=avgUsefulCount, color='red', size=10)) +
+  ggtitle('AvgUsefulCount vs Rating Distribution')
+
+############       Months and Reviews
+library(tidyverse)
+
+Bycondition <- drugDataset %>% group_by(condition) %>% filter(!grepl("~[0-9]", condition))
+
+
+
+MonthQuery <- sqldf("SELECT DISTINCT(condition), rating, count(rating) ratingCount, date
+                     FROM drugDataset 
+                     GROUP BY condition, rating, date
+                     ORDER BY rating DESC, ratingCount DESC")   
+View(MonthQuery)
+
+#######################################################################
+# CLEANING AND PREPROCESSING
+#######################################################################
+
+#remove the first column(UniqueID) from train, test, drugdata dataset
+traindataset <- traindata[ , -1]
+testdataset <- testdata[ , -1]
+drugData <- drugDataset[ , -1]
+
+# a look at the reviews
+drugData[4,3]
+str(drugData)
+
+# checking if there are missing values
+is.na(drugData)
+dim(drugData)
+
+###############################################################################################
+#                                     Sentiment Analysis
+###############################################################################################(
+View(head(drugData))
+
+# create a column name, ["labels"] for the sentiment label 
+drugData$rating <- as.numeric(drugData$rating)
+drugData$labels <- cut(drugData$rating, 2, labels = c("Negative", "Positive"))
+
+#drugData$labels <- cut(drugData$rating, 3, labels = c("negative", "neutral", "positive"))
+
+# clean the reviews column
+drugData$review <- gsub(pattern="\\W", replace=" ", drugData$review)  # remove punctuations
+drugData$review <- gsub(pattern="\\d", replace=" ", drugData$review) # get rid of digits
+drugData[4,3]
+
+install.packages("sentimentr")
+library(sentimentr)
+
+# developing sentiment scores for each review
+reviewScore <- sentiment(drugData$review)
+reviewScore
+
+# Graph the reviews base on the sentiments
+plot(reviewScore)
+
+# a look at the first 10 score and number of words
+View(head(reviewScore, 10))
+
+# create a score base on averages for each review
+aveScores <- sentiment_by(drugData$review)
+head(aveScores)
+
+#check if this is a data frame
+is.data.frame(aveScores)
+
+str(aveScores)
+
+#add the positve and negative labels to the data frame
+aveScores$Label <- paste(drugData$review)
+
+# remove the id column in the scores data frame
+aveScores <- aveScores[, -1]
+
+aveScore_cv <- reviewScore[,3:4]
+length(unique(aveScore_cv$word_count))
+
+###################################################################################################
+#                              Cross-Validation
+####################################################################################################
+
+lmMod <- lm(sentiment ~ word_count, data=aveScore_cv) # build the model
+summary(lmMod)
+
+aveScore_cv$word_count <- as.factor(aveScore_cv$word_count)
+summary(aveScore_cv)
+
+WordCount <- aggregate(.~word_count, data=aveScore_cv, mean)
+summary(WordCount)
+ 
+WordScatter <- plot(WordCount)
+WordScatter <- WordScatter + title("Word Count Against Sentiment")
+
+install.packages("car")
+install.packages("psych")
+library(car)
+library(psych)
+
+pairs.panels(WordScatter)
+
+WordPlot <- ggplot(data = aveScore_cv, aes(x = word_count, y = sentiment)) + ylab("Average Sentiment") +
+  geom_bar(stat = "identity") + scale_fill_brewer(palette = 3) +  ggtitle("Deviation Across Word Counts")
+WordPlot <- WordPlot + geom_line() +
+  geom_hline(yintercept = mean(aveScore_cv$sentiment), color="blue")
+WordPlot
+
+
+
+distPred <- predict(lmMod, aveScores)  # predict distance
+
+actuals_preds <- data.frame(cbind(actuals=drug_Test$rating, predicteds=distPred))  # make actuals_predicteds dataframe.
+correlation_accuracy <- cor(actuals_preds)  # 82.7%
+plot(actuals_preds)
+head(actuals_preds)
+
+
+install.packages('DAAG')
+library(DAAG)
+
+cvResults <- suppressWarnings(CVlm(aveScores, form.lm=ave_sentiment ~ word_count, dots=FALSE, seed=29, legend.pos="topleft",  printit=FALSE, main="The Effects of Review Length on Average Sentiment"));  # performs the CV
+attr(cvResults, 'ms')
+
+
+###################################################################################################
+#                              Sentiment on Rating 
+####################################################################################################
+install.packages("carat")
+install.packages("dplyr")
+install.packages("tidyverse")
+library(caret)
+library(dplyr)
+library(tidyverse)
+
+drugData$Sentiment <- aveScores$ave_sentiment
+DrugSentiment <- drugData
+DrugSentiment <- DrugSentiment[-3]
+DrugSentiment <- DrugSentiment[-4]
+
+Sentiment_Label <-  as.factor(ifelse(DrugSentiment$Sentiment>=0, "Positive", "Negative"))
+
+Drug_Rating_Label <-  as.factor(DrugSentiment$labels)
+
+conf <- table(Drug_Rating_Label,Sentiment_Label)
+
+cm <- confusionMatrix(conf)
+
+cm$table %>%
+  data.frame() %>% 
+  mutate(Sentiment_Label = factor(Sentiment_Label, levels = c("Positive", "Negative"))) %>%
+  group_by(Drug_Rating_Label) %>% 
+  mutate(total = sum(Freq)) %>% 
+  ungroup() %>% 
+  ggplot(aes(Drug_Rating_Label, Sentiment_Label, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = Freq), size = 10) +
+  scale_fill_gradient(low = "#ea4434", high = "#badb33") +
+  scale_x_discrete(position = "top") +
+  geom_tile(color = "black", fill = "black", alpha = 0)
+
+
+###################################################################################################
+#                              Condition and Drug sentiment graphs
+####################################################################################################
+ConditionSent <- cbind(DrugSentiment$condition, drugData$Sentiment)
+DrugSent <- cbind(DrugSentiment$drugName, drugData$Sentiment)
+
+ConditionSent <- as.data.frame(ConditionSent)
+colnames(ConditionSent) <- c("Condition", "SentimentScore")
+
+DrugSent <- as.data.frame(DrugSent)
+colnames(DrugSent) <- c("DrugName", "SentimentScore")
+
+# using sqldf package/library to extract common conditions and frequency in the dataset
+Drug_SQL <- sqldf("SELECT DISTINCT(DrugName),  SentimentScore AS SentimentScore
+                    FROM DrugSent 
+                    GROUP BY DrugName 
+                    ORDER BY SentimentScore DESC")
+
+
+str(Drug_SQL)
+is.data.frame(Drug_SQL)
+
+# store top 20 conditions in an object call commonConditions
+Top_Drug <- (head(Drug_SQL, n=10))
+Low_Drug <- (tail(Drug_SQL, n=10))
+Top_Drug$SentimentScore <- formatC(Top_Drug$SentimentScore, digits = 3, format = "f")
+
+# Plotting 
+Top_Drug_Plot <- ggplot(Top_Drug, aes(x=DrugName, y=SentimentScore, fill=DrugName)) + geom_bar(position ='dodge', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "Black", 
+                                   size = 0, angle = 90)) + ggtitle('Top 10 Drugs in Sentiment of Review') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') +  ylab('Sentiment')
+
+Bottom_Drug_Plot <- ggplot(Low_Drug, aes(x=DrugName, y=SentimentScore, fill=DrugName)) + geom_bar(position ='dodge', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "Black", 
+                                   size = 0, angle = 90)) + ggtitle('Bottom 10 Drugs in Sentiment of Review') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') +  ylab('Sentiment')
+
+
+
+### TOP AND BOTTOM CONDITIONS 
+Cond_SQL <- sqldf("SELECT DISTINCT(Condition), SentimentScore AS SentimentScore
+                    FROM ConditionSent 
+                    GROUP BY Condition 
+                    ORDER BY SentimentScore DESC")
+
+View(head(Cond_SQL, n=10))
+View(tail(Cond_SQL, n=10))
+str(Cond_SQL)
+is.data.frame(Cond_SQL)
+
+### CONDITION PLOTS
+Top_Cond <- (head(Cond_SQL, n=10))
+Low_Cond <- (tail(Cond_SQL, n=10))
+
+Top_Cond_Plot <- ggplot(Top_Cond, aes(x=Condition, y=SentimentScore, fill = Condition)) + geom_bar(position ='dodge', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "Black", 
+                                   size = 0, angle = 45)) + ggtitle('Top 10 Treatments in Sentiment of Review') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Condition Name') +  ylab('Sentiment')
+
+Bottom_Cond_Plot <- ggplot(Low_Cond, aes(x=Condition, y=SentimentScore, fill = Condition)) + geom_bar(position ='dodge', stat="identity") +
+  theme(axis.text.x = element_text(face = "bold", color = "Black", 
+                                   size = 0, angle = 45)) + ggtitle('Bottom 10 Treatments in Sentiment of Review') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Condition Name') +  ylab('Sentiment')
+
+
+#### COMBINING THE GRAPHS
+
+###################################################################################################
+#                              RF
+####################################################################################################
+install.packages("randomForest")
+library(randomForest)
+
+RF_Drug <- randomForest(
+  formula = Sentiment ~ .,
+  data    = DrugSentiment,
+  xtest   = drugLabel,
+  ytest   = DrugSentiment
+)
+drugLabel <- DrugSentiment$Sentiment
+
+
+###################################################################################################
+#                              Working in RF
+####################################################################################################
+Depression_DF <- DrugSentiment[ which(DrugSentiment$condition == 'Depression' ),]
+Depression_DF <- as.data.frame(Depression_DF)
+
+DepressionLabel <- Depression_DF$labels
+DepressionName <- Depression_DF$drugName
+
+Depression_DFTRAIN <- Depression_DF[-1]
+
+Depression_DF <- Depression_DF[-2]
+Depression_DF <- Depression_DF[-4]
+
+Depression_AGG <- aggregate(.~drugName, data=Depression_DF, mean)
+as.data.frame(Depression_AGG)
+
+
+install.packages("e1071")
+library(e1071)
+
+drug_label <- Depression_AGG$drugName
+
+SVM.fit <- svm(rating~.,data = Depression_AGG, kernel = "polynomial", cost = .1, scale = FALSE)
+prediction_P <- predict(SVM.fit, Depression_AGG, type = "class")
+ptable <- table(prediction_P, drug_label)
+
+summary(SVM.fit)
+Accuracy_SVM <- sum(diag(ptable))/sum(ptable)
+Accuracy_SVM
+
+ratingname <- as.data.frame(ptable)
+ratingname <- ratingname[-3]
+
+ratingname$prediction <- ratingname$prediction_P
+ratingname <- ratingname[-1]
+
+Depression_SVMPRED <- aggregate(.~prediction, data=ratingname, mean)
+
+Depression_SVMPRED$Name <- drug_label
+Depression_SVMPRED <- Depression_SVMPRED[-2]
+
+### Plotting aggrigated plot 
+str(Depression_AGG)
+
+# Correlation panel
+panel.cor <- function(x, y){
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- round(cor(x, y), digits=2)
+  txt <- paste0("R = ", r)
+  cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+# Customize upper panel
+upper.panel<-function(x, y){
+  points(x,y, pch = 19)
+}
+# Create the plots
+pairs(Depression_AGG[2:4], 
+      lower.panel = panel.cor,
+      upper.panel = upper.panel)
+
+my_cols <- c("#", "#E7B800", "#FC4E07")  
+
+
+library(psych)
+pairs.panels(Depression_AGG, 
+             method = "pearson", # correlation method
+             hist.col = "#00AFBB",
+             density = TRUE,  # show density plots
+             ellipses = TRUE # show correlation ellipses
+)
+
+library(plotly)
+library(dplyr)
+
+Depression_Rating <- ggplot(data=Depression_AGG, aes(x=drugName, y=rating, fill = rating)) +
+  geom_bar(position ='stack', stat="identity") + theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                                                                  size = 8, angle = 90)) + ggtitle('Depression Drug Rating') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') + ylab('Rating') 
+
+Depression_Sentiment <- ggplot(data=Depression_AGG, aes(x=drugName, y=Sentiment, fill = Sentiment)) +
+  geom_bar(position ='stack', stat="identity") + theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                                                                  size = 8, angle = 90)) + ggtitle('Depression Drug Sentiment') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Drug Name') + ylab('Sentiment') 
+
+
+###################################################################################################
+#                              Word Cloud
+####################################################################################################
+library(stringr)
+library(wordcloud)
+library(tm)
+
+# developing a corpus
+Corpus <- rbind(drugData$review)
+
+#remove all '\\' and  '/'from the word collections
+Corpus <- gsub("[\\]", "", Corpus)
+Corpus <- gsub("[/]", "", Corpus)
+#reviewCorpus <- gsub("[^[:alnum:][:blank:]+?&/\\-]", "", reviewCorpus)   # keep for future use
+
+# create a corpus
+reviewCorpus <- Corpus(VectorSource(Corpus))
+inspect(reviewCorpus)
+str(reviewCorpus)
+
+# docment length
+length(reviewCorpus)
+(getTransformations())
+
+# Create plain text
+reviewCorpus <- tm_map(Corpus, PlainTextDocument)
+inspect(reviewCorpus[1:2])
+
+# remove punctuations
+reviewCorpus <- tm_map(reviewCorpus, removePunctuation)
+inspect(reviewCorpus[1:2])
+
+# remove all numbers
+reviewCorpus <- tm_map(reviewCorpus, removeNumbers)
+inspect(reviewCorpus[1:2])
+
+# do stemming
+#  stemDocument("Running")
+#reviewCorpus <- tm_map(reviewCorpus, stemDocument)
+inspect(reviewCorpus[1:2])
+
+# remove stopwords since they add no value to the sentiments
+###  stopwords(kind = 'en')
+reviewCorpus <- tm_map(reviewCorpus, removeWords, stopwords(kind = 'english'))
+inspect(reviewCorpus[1:2])
+
+# set all words to lowercase
+reviewCorpus <- tm_map(reviewCorpus, tolower)
+inspect(reviewCorpus[1:2])
+
+#save dataset in "cleanCorpus" object
+cleanCorpus <- reviewCorpus
+
+#remove created stopwords or words
+# remove words that i do not want so i created an object for the list
+mystopwords <- c("st","the", "they", "i m", "may", "able","now","day","now","like","went","first","hours","get")
+cleanCorpus <- tm_map(cleanCorpus, removeWords, mystopwords)
+#cleanCorpus <- tm_map(cleanCorpus, removeWords, c("diks", "chiks", "bitches"))
+
+# remove all whitespaces
+cleanCorpus <- tm_map(cleanCorpus, stripWhitespace)
+inspect(reviewCorpus[1:2])
+
+#     TERMDOCUMENTMATRIX
+#Create a tdm from our cleanCorpus
+cleanCorpus_tdm <- TermDocumentMatrix(cleanCorpus)
+cleanCorpus_tdm
+
+cleanCorpus_tdm <- as.matrix(cleanCorpus_tdm)
+cleanCorpus_tdm[1:10, 1:20]
+
+#Grapgh the tdm of negative words
+plot_tdm <- rowSums(cleanCorpus_tdm)
+plot_tdm
+plot_tdm <- subset(plot_tdm, plot_tdm <= 30)
+as.data.frame(plot_tdm)
+
+tail(frequency(plot_tdm))
+
+
+######################################################################################
+#                      Word Cloud
+##########################################################################################
+library(wordcloud)
+
+plot_tdm <- rowSums(cleanCorpus_tdm)
+plot_tdm
+plot_tdm <- subset(plot_tdm, plot_tdm <= 60)
+plot_tdm
+
+word_tdm <-sort(rowSums(cleanCorpus_tdm), decreasing = TRUE)
+set.seed(222)
+
+wordcloud(words = names(word_tdm),
+          freq = word_tdm,
+          max.words = ,
+          random.order = F,
+          min.freq = 20,
+          colors = brewer.pal(5, "Dark2"), # color to apply
+          scale = c(5, 0.3),
+          rot.per = 0.3)  # rotation percentage of words. eg 30% be rotated
+
+#install.packages("wordcloud2")
+install.packages("wordcloud2")
+library(wordcloud2)
+
+
+word_tdm <- data.frame(names(word_tdm), word_tdm)
+colnames(word_tdm) <- c("word", "freq")
+
+# create another wordclord using wordcloud2 package
+wordcloud2(word_tdm, 
+           size = 0.5,
+           shape = "circle", #  circle, triangle, rectangle,star etc.
+           rotateRatio = 0.5,
+           minSize = 30)
+
+
+# building letter cloud
+letterCloud(word_tdm, 
+            word = "a", 
+            size=1)
+
+
+
+
+
+
+
+######################################################
+#   TRASH
+##########################################################
+
+# visualizing the TOP 20 conditions in the dataset
+ggplot(commonConditions, aes(condition)) + geom_bar(aes(weight=conditionCount), stat= 'identity') +
+  theme(axis.text.x = element_text(face = "bold", color = "blue", 
+                                   size = 8, angle = 90)) + ggtitle('Top 20 Conditions in Drug Reviews') + 
+  theme(plot.title = element_text(hjust = 0.5)) + xlab('Conditions Reviewed') +
+  ylab('Number of Conditions')
+
+
+# Transformation of aplied to all the document in one sweep. that is to say cleaning the fedpaplist
+
+fedpapcorpus <- gsub(pattern="\\W", replace=" ", fedpaplist)  # remove punctuations
+fedpapcorpus <- tolower(fedpapcorpus) # convert all words to lowercase
+fedpapcorpus <- gsub(pattern="\\d", replace=" ", fedpapcorpus) # get rid of digits
+fedpapcorpus <- gsub(pattern="\\b[A-z]\\b{1}", replace=" ", fedpapcorpus) # remove single letter words
+fedpapcorpus <- removeWords(fedpapcorpus, stopwords("english")) # get rid of stopwords
+
+
+fedpapcorpus <- removeWords(fedpapcorpus, mystopwords) # get rid of words in mystopwords list
+
+fedpapcorpus[1]
+
+# remove all whitespaces using the function stripWhitespace()
+fedpapcorpus <- stripWhitespace(fedpapcorpus)
+fedpapcorpus[1]
+
+gsub
+
+sqldf("UPDATE drugData
+      SET condition = ' '
+      WHERE condition LIKE '%span%'")
+
+
+
+sqldf("DELETE FROM drugData
+      WHERE condition LIKE '%span%'") 
+
+drugData <- sqldf("SELECT *  FROM drugData
+                   WHERE condition LIKE '%</span>%'") 
+
+#### Removing conditions woth values like /<span> from the dataset
+drugData$condition <- drugData$condition[(drugData$condition %in% gsub("</span> users found this comment helpful.", "", drugData$condition))]
+
+dim(drugData)
+
+View(drugData)
+
+(drugData$condition=="%</span>%")
+
+
+sentiment <- c()
+
+drugData$sentiment <- sentiment
+
+drugData
+
+
+colnames()
+
+drugData$sentiment <-  if(drugData$rating <= 5)
+{ print("Negative")} else {print("Positive")}
+
+
+drugData$review <- gsub("\\s", " ", drugData$review)      #stripWhitespace
+drugData$review <- gsub("[[:space:]]", "", drugData$review)
+
+
+
+### Setting Factor
+drug_Test$rating <- as.factor(drug_Test$rating)
+drug_Train$rating <- as.factor(drug_Train$rating)
+
+### Subsetting Function
+train <- sample(nrow(drug_Train),nrow(drug_Train)*0.01)
+test <- sample(nrow(drug_Test),nrow(drug_Test)*0.05)
+
+### Subsetting Data
+training <- drug_Train[train,]
+testing <- drug_Test[test,]
+
+### Investigation
+length(unique(training$review))
+length(unique(training$drugName))
+length(unique(training$condition))
+length(unique(training$rating))
+length(unique(training$usefulCount))
+length(unique(training$date))
+
+### Sentiment analysis 
+install.packages("SentimentAnalysis")
+library(SentimentAnalysis)
+
+### Creating a vector of strings
+reviews <- training$review
+
+###  Analyze sentiment of our reviews
+sentiment <- analyzeSentiment(reviews)
+
+### Extract dictionary-based sentiment according to the QDAP dictionary
+sentiment$SentimentQDAP
+
+### View sentiment direction (i.e. positive, neutral and negative)
+training$Sentiment <- convertToDirection(sentiment$SentimentQDAP)
+
+### Now to create bins of the reviews 
+training$bins <- cut(training$rating,3, labels = c("negative", "neutral", "positive"))
+
+### We can visualize the different predictions of sentiment that end up in each category of the bins
+install.packages("ggplot2")
+install.packages("sm")
+library(ggplot2)
+library(dplyr)
+library(sm)
+
+ratingPlot <- density(training$rating)
+plot(ratingPlot, main="Kernel Density of Rating") 
+
+table(training$bins)
+
+table(training$Sentiment)
+
+tab <- table(training$Sentiment, training$bins)
+
+### Predictive ability of our initial sentiment analysis without any cleaning.
+sum(diag(tab))/sum(tab)
+
