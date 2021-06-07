@@ -1,5 +1,7 @@
 Name: Eugene Patrick Carlin III
 
+Email: epcarlin@syr.edu
+
 SU ID: epcarlin
 
 MS Applied Data Science Portfolio
