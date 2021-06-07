@@ -1,0 +1,268 @@
+### PATRICK CARLIN 
+### IST 719 - Information Visualization
+### Final Poster - Landifll Data
+
+## Initial loading and investigatingthe data
+
+## Loading
+library(readr)
+land.dat <- read_csv("Documents/IST 719 - Information Visualization/Data/lmopdat.csv")
+
+
+## Cleaning
+colnames(land)
+
+land <- land.dat[!is.na(land.dat$`Waste in Place (tons)`),]
+land$`Landfill ID` <- NULL
+land$`GHGRP ID` <- NULL
+land$`Landfill Operator Organization` <- NULL
+land$`Landfill Alias` <- NULL
+land$`Permitted as RD&D LF` <- NULL
+land$`Design Landfill Area (acres)` <- NULL
+land$`Design Landfill Depth (feet)` <- NULL
+land$`Landfill Owner Organization(s)` <- NULL
+land$`Landfill Design Capacity (tons)` <- NULL
+comments <- land$`Gas Collection System Comments`
+comments <- na.omit(comments)
+
+
+## Investigating
+str(land)
+
+
+## Total Waste in place
+install.packages("vioplot")
+library(vioplot)
+
+par(mfrow=c(2,1))
+
+
+## Barplot for sector
+land.1 <- na.omit(land)
+
+section_agg <- tapply(land.1$`Current Landfill Area (acres)`, list(land.1$`Ownership Type`), mean)
+
+barplot(section_agg, col = "#003F00"
+        , ylab = "Average Acreage"
+        , main = "Private / Public Landfill Breakdown")
+
+vioplot(land.1$`Current Landfill Area (acres)`
+        , main = "Acreage Distribution"
+        , col = "#003F00"
+        , xlab = ""
+        , ylab = "Acreage")
+
+
+## Methane and lfg for subsetting line plot
+## lfg_agg <- aggregate(land.1$`LFG Generated (mmscfd)`, list(land.1$`Year Landfill Opened`), mean)
+## methane_agg <- aggregate(land.1$`Percent Methane`, list(land.1$`Year Landfill Opened`), mean)
+
+## line_plot <- waste_agg
+## line_plot$LFG <- lfg_agg$x
+## line_plot$Methane <- methane_agg$x
+
+## ggplot(data = line_plot, aes(x = Group.1)) +
+##  geom_line(aes(y = LFG), color = "red") +
+##  geom_line(aes(y = Methane), color = "green")
+
+
+
+par(mfrow=c(2,1))
+
+## Waste  allowed over the years
+allow_agg <- aggregate(land.1$`Annual Waste Acceptance Rate (tons per year)`, list(land.1$`Year Landfill Opened`), mean)
+colnames(allow_agg) <- c("Year","Accepted (tons)")
+
+allows_plot <- ggplot(allow_agg) + aes(x = Year, y =`Accepted (tons)`) + geom_point() ## rug somewhat shows a density
+
+allow_pred <- predict(lm(allow_agg$Accepted ~ allow_agg$Year))
+
+allows_plot <- ggplot(allow_agg) + aes(y = `Accepted (tons)`, x = Year) + geom_point() + 
+  geom_line(aes(y = allow_pred), color = "#007a00", lwd = 1) +
+  ggtitle("Annual Waste Acceptance Rate") +
+  theme(panel.background = element_blank())
+
+allows_plot
+
+
+## Line plot
+total_waste_agg <- aggregate(land.1$`Waste in Place (tons)`, list(land.1$`Year Landfill Opened`), mean)
+
+combined_line <- allow_agg
+
+combined_line$waste <- total_waste_agg$x
+
+colnames(combined_line) <- c("Year","Accepted","Total Waste")
+
+library("tidyverse")
+combined_line <- combined_line %>%
+  select(Year, `Accepted`, `Total Waste`) %>%
+  gather(key = "Type", value = "Value", -Year)
+
+combined_line$Value <- log10(combined_line$Value)
+
+ggplot(combined_line, aes(x = Year, y = Value)) + 
+  geom_line(aes(color = Type, linetype = Type)) + 
+  scale_color_manual(values = c("#5B3500", "#007a00")) +
+  theme(panel.background = element_blank())
+  
+
+
+## Changing plot space
+par(mfrow=c(2,1))
+
+
+## Smooth ScatterPlot for total LFG produced
+lfg_agg <- aggregate(land.1$`LFG Generated (mmscfd)`, list(land.1$`Year Landfill Opened`), mean)
+
+summary(lfg_agg)
+
+scatter.smooth(x = lfg_agg$Group.1
+               , y = lfg_agg$x
+               , xlab = ""
+               , ylim = c(0,25)
+               , xlim = c(1950,2000)
+               , degree=2
+               , col = "#007a00"
+               , span=0.4
+               , lwd = 3
+               , lty = 4
+               , ylab = "LFG Collected (mmscfd)"
+               , bty = "n")
+
+
+## Smooth ScatterPlot for total methane produced
+methane_agg <- aggregate(land.1$`Percent Methane`, list(land.1$`Year Landfill Opened`), mean)
+
+summary(methane_agg)
+
+scatter.smooth(x = methane_agg$Group.1
+               , y = methane_agg$x
+               , xlab = ""
+               , ylim = c(30,54.05)
+               , xlim = c(1950,2000)
+               , degree=2
+               , col = "#007a00"
+               , span=0.4
+               , lwd = 3
+               , lty = 4
+               , ylab = "Percent Methane"
+               , bty = "n")
+
+
+## My center plot for the states
+
+install.packages("ggrepel")
+install.packages("mapproj")
+install.packages("ggplot2")
+library(ggplot2)
+library(ggrepel)
+library(mapproj)
+
+
+waste.max <- land.1 %>%
+  arrange(desc(`Waste in Place (tons)`)) %>%
+  slice(1:20) 
+
+us <- map_data('state')
+
+waste.max$'Waste in Place (tons/400M)' <- 400000000/(waste.max$`Waste in Place (tons)`)
+
+summary(waste.max$`Waste in Place (tons/400M)`)
+
+state_plot <- ggplot()+
+  geom_polygon(data=us, aes(x=long, y=lat, group = group), colour ="white", fill = "Grey", alpha = 100) +
+  geom_point(data=waste.max, aes(x=Longitude, y=Latitude, size = `Current Landfill Area (acres)`, color = `Waste in Place (tons/400M)`)) +
+  scale_color_gradient(low = '#87da43', high = '#003f00') +
+  labs(x="", y="", title="") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+  theme(panel.background = element_blank()) + 
+  theme(axis.ticks.y = element_blank(),axis.text.y = element_blank()) + 
+  theme(axis.ticks.x = element_blank(),axis.text.x = element_blank()) + 
+  theme(plot.title = element_text(lineheight=.8, face="bold", vjust=1)) +
+  theme(legend.position="left") +
+  guides(size=guide_legend("Current Landfill Area (Acres)")) +
+  geom_text_repel(data = waste.max, aes(x=Longitude, y = Latitude, label = `Landfill Name`), color = "black") +
+  coord_map(projection = "mercator", xlim=c(-130,-60)) 
+
+state_plot
+
+## Associated barplot
+waste.max.1 <- waste.max[order(waste.max$`Waste in Place (tons)`, decreasing = TRUE),]
+
+side_plot <- ggplot(waste.max.1, aes(x = reorder(`Landfill Name`, `Waste in Place (tons/400M)`), y = `Waste in Place (tons/400M)`, fill =`Waste in Place (tons/400M)`)) +
+  geom_bar(stat="identity") +
+  scale_fill_continuous(low = '#87DA43', high = '#003f00') +
+  coord_flip() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + 
+  theme(panel.background = element_blank()) + 
+  labs(x="", y="", title="")
+
+side_plot
+
+
+
+
+
+
+
+
+
+
+
+## Additional Plotting DO NOT RUN
+## Random Sectors
+## library(dplyr)
+
+## section_agg <- land %>%
+##  group_by(`Current Landfill Area (acres)`,`Ownership Type`) %>% 
+##  summarise_each(funs(mean))
+
+## plot((section_agg$`Current Landfill Area (acres)`))
+
+## Working through scatter plots
+plot(land$`Current Landfill Area (acres)`, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$`LFG Generated (mmscfd)`, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$`Year Landfill Opened`, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$`LFG Generated (mmscfd)`, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$Latitude, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$Longitude, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$`Waste in Place (tons)`, land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+plot(land$`Current Landfill Depth (feet)` ,land$`Percent Methane`, pch = 16, cex = 1, col = "orange")
+
+
+plot(land$`Waste in Place (tons)`, land$`LFG Generated (mmscfd)`, pch = 16, cex = 1, col = "orange")
+plot(land$Latitude, land$`LFG Generated (mmscfd)`, pch = 16, cex = 1, col = "orange")
+plot(land$`LFG Generated (mmscfd)`,land$Longitude, pch = 16, cex = 1, col = "orange")
+plot(land$`Current Landfill Depth (feet)`, land$`LFG Generated (mmscfd)`, pch = 16, cex = 1, col = "orange"
+     , xlab = "Landfill Depth"
+     , ylab = "Landfill Gas created"
+     , main = "Depth vs LFG"
+     , abline(lm(land$`Design Landfill Depth (feet)`~land$`LFG Generated (mmscfd)`)))
+
+
+par(mar = c(0,0))
+
+
+fit <- lm(land$`Year Landfill Opened` ~ land$`LFG Generated (mmscfd)`, data=land)
+
+
+plot(land$`Year Landfill Opened`, land$`LFG Generated (mmscfd)`, pch = 16, cex = 1, col = "darkgreen"
+     , xlab = "Year Landfill Opened"
+     , ylab = "Landfill Gas Craeted"
+     , main = "Year Opened against LFG created")
+
+plot(land$`Year Landfill Opened`, (land$`Waste in Place (tons)`)^(1/2.5), pch = 16, cex = 1, col = "dark green"
+     , xlab = "Year Landfill Opened"
+     , ylab = "Waste in tons (^(1/2)"
+     , main = "Year Landfill openeed vs Waste Currently in Landfill")
+
+plot(land$`Year Landfill Opened`, land$`Annual Waste Acceptance Rate (tons per year)`/100, pch = 16, cex = 1, col = "dark green"
+     , xlab = "Year Landfill Opened"
+     , ylab = "Waste acceptabnce rate increased"
+     , main = "Year Landfill openeed vs tons accepted increased")
+
+
+
+
