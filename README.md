@@ -1,6 +1,6 @@
 Name: Eugene Patrick Carlin III
 
-Net ID: epcarlin
+SU ID: epcarlin
 
 MS Applied Data Science Portfolio
 
